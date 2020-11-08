@@ -1,11 +1,14 @@
 # coding=utf-8
 from pyspark import SparkContext
 from pyspark import SparkConf
-import math
-import sys
+from src.utils.get import get
+from src.utils.find import find
+
+from src.utils.getDistance import cosDistance
+
 
 def CreatSparkContext():
-    sparkConf=SparkConf().setAppName("WordCounts").set("spark.ui.showConsoleProgress","false")
+    sparkConf=SparkConf().setAppName("WordCounts").set("spark.ui.showConsoleProgress","true")
     sc=SparkContext(conf=sparkConf)
     print("master=" + sc.master)
     SetLogger(sc)
@@ -21,7 +24,7 @@ def SetLogger(sc):
 def SetPath(sc):
     global Path
     if sc.master[0:5]=="local":
-        Path="file:///Users/wskyler/PycharmProjects/MovieRecommend/lab2/"
+        Path="file:///Users/wskyler/PycharmProjects/MovieRecommend/data/lab2/"
     else:
         Path="hdfs://localhost:9000/"
 
@@ -32,34 +35,6 @@ def prepareData(sc):
     ratingsRDD = rawRatings.map(lambda x:(x[0],x[1]))
     return(ratingsRDD)
 
-
-# 计算余弦距离
-def calculate(x1, x2):
-    count1=[ ]
-    count2=[ ]
-    for x in x1:
-        count1.append(x)
-    for x in x2:
-        count2.append(x)
-    count = len(count1) * len(count2) * 1.0
-    a = set(count1)
-    b = set(count2)
-    c = a & b
-    commonLength = len(c)
-    w = commonLength / math.sqrt(count)
-    return w
-
-
-def find(x, list_item):
-    for item in list_item:
-        if item == x:
-            return True
-    return False
-
-
-def get(x, k):
-    x.sort(key = lambda x:x[1],reverse=True)
-    return x[:k]
 
 
 def recommend(W, user_item, user_id,k):
@@ -78,23 +53,33 @@ if __name__=="__main__":
     # 数据处理，得到用户观看电影矩阵以及电影被观看矩阵RDD
     print("prepare data")
     ratingsRDD = prepareData(sc)
+
+
     user_item = ratingsRDD.groupByKey().map(lambda x:(x[0],list(x[1])))
     print("got user_item")
+    print(user_item.first())
+
+
     RDD = ratingsRDD.map(lambda x:(x[1],x[0]))
     item_user = RDD.groupByKey().map(lambda x:(x[0],list(x[1])))
     print("got item_user")
+    print(item_user.first())
 
     print("item_user---item_user")
     item_user = item_user.cartesian(item_user).filter(lambda x:x[0][0]!=x[1][0])
+    print(item_user.first())
 
     print("calculate")
-    w = item_user.map(lambda x:(x[0][0],x[1][0],calculate(x[0][1], x[1][1])))
+    w = item_user.map(lambda x:(x[0][0], x[1][0], cosDistance(x[0][1], x[1][1])))
     W = w.map(lambda x:(x[0],(x[1],x[2])))
     W = W.groupByKey().map(lambda x:(x[0],list(x[1])))
     print("got similar table")
+    print(W.first())
     print("recommending.......")
     user_id = u'200'
     recommend = recommend(W, user_item, user_id, 5)
     print("Result:")
     for r in recommend:
         print(r)
+
+
