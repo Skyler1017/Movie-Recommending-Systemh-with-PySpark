@@ -85,7 +85,7 @@ $$
 - Jaccard相似系数用于计算两个集合间的相似性，通过计算集合的交集的模和并集的模的比值实现:
 
 $$
-sim(x,y) = \frac{x \cdot y}{|x|^2 + |y|^2 + x \cdot y}
+sim(x,y) = \frac{x \cdot y}{|x|^2 + |y|^2 - x \cdot y}
 $$
 
 
@@ -238,25 +238,39 @@ wordCounts.collect()
 
 ### 数据读入
 
-
+- 由于是单结点模式，直接读入本地文件，生成RDD，并将其类型转换成`<userID, movieID, rating>`的格式（数据都为int类型），命名为`raw_rating`
 
 ### 数据计算
 
-#### 预处理-计算两个关键矩阵
+#### 预处理
 
+- 由于用户的打分习惯有偏差，在进行计算之间对用户的打分进行一次标准化操作
 
+#### 计算两个关键矩阵
+
+- `user_item`的计算
+  - 这个矩阵将`raw_rating`按`userID`聚合起来：`<(userID, Iterable((movieID, rating))>`
+  - 表示用户看了哪些电影，以及对应的评分是多少，用来进行推荐
+- `item_user` 的计算
+  - 这个矩阵将`raw_rating`按`movieID`聚合起来：`<(movieID, Iterable((userID, rating))>`
+  - 表示这部电影被哪些用户看过，以及对应的评分是多少，用来计算电影之间的距离
 
 #### 生成热榜数据
 
-
-
-#### 物品相关pair的统计
+- 对`item_user`进行`reduce`，即可得到每部电影的平均得分，根据平均得分进行降序排列，可以得到一系列受大众欢迎的电影
+- 用来填充推荐不够的情况
 
 #### 物品相似度的计算
 
+- `item_user` join自身：`<(movieID, Iterable((userID, rating)), (movieID, Iterable((userID, rating))>` 的格式，再对每个数据进行距离的计算，得到`(movieID, Iterable(movieId, distance))`的相似度RDD
+
 #### 推荐
 
+- 从用户打分高的电影入手，找到这些电影相似的电影，生成`<(movieID, score)>`的推荐RDD，过滤掉用户已经看过的电影，再按`score`降序排列推荐过用户。如果不能找到足够数量的电影，则用热榜数据进行填充
 
+### 数据保存
+
+- 推荐结果用 Spark SQL 模块持久化在 MySQL 中，供实时查询
 
 
 
